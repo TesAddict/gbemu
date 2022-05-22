@@ -1,10 +1,16 @@
-
+mod gameboy;
+mod cpu;
+mod bus;
 mod cartridge;
+use gameboy::*;
+use cpu::*;
+use bus::*;
 use cartridge::*;
 
 fn main() {
-    let mut cart = Cartridge::new();
-    let size = Cartridge::load_cartridge(&mut cart, &String::from("roms/hello.gb"));
-    Cartridge::read(&cart, 0x100);
-    println!("Loaded ROM of size: {}", size);
+    let mut gb = GameBoy::power_on();
+    gb.load_game("roms/hello.gb".to_string());
+    gb.run();
+    gb.run();
+    gb.run();
 }
