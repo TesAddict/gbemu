@@ -35,12 +35,40 @@ impl CartridgeType {
 }
 pub struct Cartridge {
     rom : Vec<u8>,
+    rom_sz : usize,
     ctype: CartridgeType
+}
+
+static CTYPE_ADDR: usize = 0x0147;
+static ROM_SIZE_ADDR: usize = 0x0148;
+
+fn decode_cartridge_header(cart: &mut Cartridge) -> bool {
+    // Get Cartridge Type.
+    let ctype_opt = CartridgeType::from_u8(cart.rom[CTYPE_ADDR]);
+    match ctype_opt {
+        Some(ctype) => {
+            println!("Cartridge::decode_header - Cartridge Type: {}", cart.rom[CTYPE_ADDR]);
+            cart.ctype = ctype
+        },
+        None => {
+            println!("Cartridge::decode_header - Unknown Cartridge Type: {}", cart.rom[CTYPE_ADDR]);
+            return false;
+        }
+    }
+    // Get ROM size.
+    let rom_sz = cart.rom[ROM_SIZE_ADDR];
+    if cart.rom.len() != (32*1024) << rom_sz {
+        println!("Cartridge::decode_header - Cartridge size from header does not match ROM size.");
+        return false;
+    }
+    cart.rom_sz = (32*1024) << rom_sz;
+    println!("Cartridge::decode_header - Cartridge Size: {}", cart.rom_sz);
+    return true;
 }
 
 impl Cartridge {
     pub fn new() -> Cartridge {
-        Cartridge { rom: vec![], ctype: CartridgeType::RomOnly }
+        Cartridge { rom: vec![], rom_sz: (32*1024), ctype: CartridgeType::RomOnly }
     }
 
     pub fn load_cartridge(cart: &mut Cartridge, rom_path: &String) -> usize {
@@ -54,25 +82,16 @@ impl Cartridge {
         Vec::resize(&mut cart.rom, file.metadata().unwrap().len() as usize, 0);
         match file.read(&mut cart.rom) {
             Ok(size) => {
-                let ctype_opt = CartridgeType::from_u8(cart.rom[0x147]);
-                match ctype_opt {
-                    Some(ctype) => {
-                        println!("Cartridge::load_cartridge - CartridgeType: {}", cart.rom[0x147]);
-                        cart.ctype = ctype
-                    },
-                    None => {
-                        println!("Cartridge::load_cartridge - Unknown CartridgeType: {}", cart.rom[0x147]);
-                        return 0;
-                    }
+                if decode_cartridge_header(cart) {
+                    return size
                 }
-                return size
             },
             Err(err) => {
                 println!("Cartridge::load_cartridge - No data has been loaded from ROM at path {}. Error: {}\n", rom_path, err);
                 return 0;
             }
         };
-
+        return 0;
     }
 
     // TODO: Implement memory mapper. 
