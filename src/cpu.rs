@@ -47,15 +47,17 @@ impl Cpu {
         self.pc = u16::from(hi) << 8 | u16::from(lo);
     }
 
-    pub fn execute(&mut self, bus: &mut Bus, instr: u16) {
+    pub fn execute(&mut self, bus: &mut Bus, instr: u16) -> bool {
         match instr {
             0x0000 => self.nop(bus),
             0x0001 => self.ld_bc_d16(bus),
             0x00C3 => self.jp_a16(bus),
             _ => {
                 println!("Cpu:execute - Instruction {:#04x} not implemented.\n", instr);
+                return false;
             }
         }
+        return true;
     }
 
     pub fn fetch(&self, bus: &mut Bus) -> u16 {

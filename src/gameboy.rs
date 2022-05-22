@@ -21,7 +21,9 @@ impl GameBoy {
     }
 
     pub fn run(&mut self) {
-        let instr = self.cpu.fetch(&mut self.bus);
-        self.cpu.execute(&mut self.bus, instr);
+        let mut instr = self.cpu.fetch(&mut self.bus);
+        while self.cpu.execute(&mut self.bus, instr) {
+            instr = self.cpu.fetch(&mut self.bus);
+        }
     }
 }

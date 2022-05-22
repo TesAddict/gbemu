@@ -11,6 +11,4 @@ fn main() {
     let mut gb = GameBoy::power_on();
     gb.load_game("roms/hello.gb".to_string());
     gb.run();
-    gb.run();
-    gb.run();
 }
