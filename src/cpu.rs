@@ -32,19 +32,15 @@ impl Cpu {
     }
 
     fn ld_bc_d16(&mut self, bus: &mut Bus) {
-        let lo = bus.read(self.pc+1);
-        let hi = bus.read(self.pc+2);
         self.debug_wait(bus, 0x0001, "LDBCD16".to_string(), 3, 12);
+        self.b = bus.read(self.pc+2);
+        self.c = bus.read(self.pc+1);
         self.pc += 3;
-        self.b = hi;
-        self.c = lo;
     }
 
     fn jp_a16(&mut self, bus: &mut Bus) {
-        let lo = bus.read(self.pc+1);
-        let hi = bus.read(self.pc+2);
         self.debug_wait(bus, 0x00C3, "JPA16".to_string(), 3, 16);
-        self.pc = u16::from(hi) << 8 | u16::from(lo);
+        self.pc = u16::from(bus.read(self.pc+2)) << 8 | u16::from(bus.read(self.pc+1));
     }
 
     pub fn execute(&mut self, bus: &mut Bus, instr: u16) -> bool {
