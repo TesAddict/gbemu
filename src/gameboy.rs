@@ -1,15 +1,15 @@
 use crate::Cartridge;
 use crate::Bus;
-use crate::Cpu;
+use crate::Sharp8080;
 
 pub struct GameBoy {
-    cpu: Cpu,
+    cpu: Sharp8080,
     bus: Bus,
 }
 
 impl GameBoy {
     pub fn power_on() -> GameBoy {
-        GameBoy { cpu: Cpu::new(), bus: Bus::new() }
+        GameBoy { cpu: Sharp8080::new(), bus: Bus::new() }
     }
 
     pub fn load_game(&mut self, path: String) {
@@ -21,9 +21,8 @@ impl GameBoy {
     }
 
     pub fn run(&mut self) {
-        let mut instr = self.cpu.fetch(&mut self.bus);
-        while self.cpu.execute(&mut self.bus, instr) {
-            instr = self.cpu.fetch(&mut self.bus);
-        }
+        let opcode = self.cpu.fetch_opcode(&self.bus);
+        self.cpu.execute(&mut self.bus, opcode);
+
     }
 }

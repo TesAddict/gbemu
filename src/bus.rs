@@ -21,7 +21,7 @@ impl Bus {
         }
     }
 
-    pub fn read(&mut self, addr: u16) -> u8 {
+    pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => {
                 return self.cartridge.read(addr);
