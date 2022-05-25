@@ -35,6 +35,30 @@ macro_rules! cb_set_bit {
         }
     }
 }
+
+macro_rules! cb_bit {
+    ($self: expr, $opcode: expr, $bit: literal) => {
+        {
+            let mut result: u8 = 0;
+            match $opcode % 0x8 {
+                0x0 => result = $self.b & (0b1 << $bit),
+                0x1 => result = $self.c & (0b1 << $bit),
+                0x2 => result = $self.d & (0b1 << $bit),
+                0x3 => result = $self.e & (0b1 << $bit),
+                0x4 => result = $self.h & (0b1 << $bit),
+                0x5 => result = $self.l & (0b1 << $bit),
+                0x6 => result = $self.l & (0b1 << $bit),
+                0x7 => result = $self.a & (0b1 << $bit),
+                _   => () 
+            }
+            $self.zf = result;
+            $self.nf = 0;
+            $self.hf = 1;
+            $self.apply_flags();
+        }
+    }
+}
+
 pub struct Sharp8080 {
     a: u8,
     b: u8,
@@ -45,11 +69,19 @@ pub struct Sharp8080 {
     l: u8,
     sp: u16,
     pc: u16,
+    zf: u8,
+    nf: u8,
+    hf: u8,
+    cf: u8
 }
 
 impl Sharp8080 {
     pub fn new() -> Sharp8080 {
-        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, pc: 0x0100 }
+        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0 }
+    }
+
+    fn apply_flags(&self) {
+
     }
 
     pub fn step(&self) {
@@ -93,6 +125,14 @@ impl Sharp8080 {
             }
             Type::CB => {
                 match opcode {
+                    0xCB40..=0xCB47 => cb_bit!(self, opcode, 0),
+                    0xCB48..=0xCB4F => cb_bit!(self, opcode, 1),
+                    0xCB50..=0xCB57 => cb_bit!(self, opcode, 2),
+                    0xCB58..=0xCB5F => cb_bit!(self, opcode, 3),
+                    0xCB60..=0xCB67 => cb_bit!(self, opcode, 4),
+                    0xCB68..=0xCB6F => cb_bit!(self, opcode, 5),
+                    0xCB70..=0xCB77 => cb_bit!(self, opcode, 6),
+                    0xCB78..=0xCB7F => cb_bit!(self, opcode, 7),
                     // Restore bit opcodes.
                     0xCB80..=0xCB87 => cb_res_bit!(self, opcode, 0),
                     0xCB88..=0xCB8F => cb_res_bit!(self, opcode, 1),
