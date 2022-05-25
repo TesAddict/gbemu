@@ -97,8 +97,6 @@ impl Sharp8080 {
         }
     }
 
-
-
     pub fn execute(&mut self, bus: &mut Bus, opcode: u16) {
         // pc_base points to the first param or next opcode.
         let (instruction, pc_base) = if opcode & 0xFF00 == 0xCB00 {
