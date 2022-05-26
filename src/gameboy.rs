@@ -21,8 +21,9 @@ impl GameBoy {
     }
 
     pub fn run(&mut self) {
-        let opcode = self.cpu.fetch_opcode(&self.bus);
-        self.cpu.execute(&mut self.bus, opcode);
-
+        while true {
+            let opcode = self.cpu.fetch_opcode(&self.bus);
+            self.cpu.execute(&mut self.bus, opcode);
+        }
     }
 }

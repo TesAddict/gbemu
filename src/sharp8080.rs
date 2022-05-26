@@ -1,5 +1,23 @@
 use crate::Bus;
 
+macro_rules! ld_reg {
+    ($self: expr, $reg: expr, $opcode: expr) => {
+        {
+            match $opcode % 0x8 {
+                0x0 => $reg = $self.b,
+                0x1 => $reg = $self.c,
+                0x2 => $reg = $self.d,
+                0x3 => $reg = $self.e,
+                0x4 => $reg = $self.h,
+                0x5 => $reg = $self.l,
+                0x6 => $reg = $self.l,
+                0x7 => $reg = $self.a,
+                _   => ()
+            }
+        }
+    }
+}
+
 macro_rules! cb_res_bit {
     ($self: expr, $opcode: expr, $bit: literal) => {
         {
@@ -58,7 +76,7 @@ macro_rules! cb_bit {
         }
     }
 }
-
+#[derive(Debug)]
 pub struct Sharp8080 {
     a: u8,
     b: u8,
@@ -72,12 +90,13 @@ pub struct Sharp8080 {
     zf: u8,
     nf: u8,
     hf: u8,
-    cf: u8
+    cf: u8,
+    ime: bool,
 }
 
 impl Sharp8080 {
     pub fn new() -> Sharp8080 {
-        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0 }
+        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0, ime: true }
     }
 
     fn apply_flags(&self) {
@@ -107,11 +126,24 @@ impl Sharp8080 {
         match instruction.encoding {
             Type::N => {
                 match opcode {
-                    0x0000 => (),
-                    0x0002 => self.ld_bc_a(),
-                    0x0003 => self.inc_bc(),
-                    _      => self.undefined_instruction(),
+                    0x0000          => (),
+                    0x0002          => self.ld_bc_a(),
+                    0x0003          => self.inc_bc(),
+
+                    0x0040..=0x0047 => ld_reg!(self, self.b, opcode),
+                    0x0048..=0x004f => ld_reg!(self, self.c, opcode),
+                    0x0050..=0x0057 => ld_reg!(self, self.d, opcode),
+                    0x0058..=0x005f => ld_reg!(self, self.e, opcode),
+                    0x0060..=0x0067 => ld_reg!(self, self.h, opcode),
+                    0x0068..=0x006f => ld_reg!(self, self.l, opcode),
+
+                    0x0078..=0x007f => ld_reg!(self, self.a, opcode),
+
+                    0x00F3          => self.ime = false,
+                    _               => self.undefined_instruction(),
                 }
+                self.pc += instruction.length;
+                self.decode_type_n(instruction);
             }
             Type::D16 => {
                 let b0 = bus.read(pc_base);
@@ -120,6 +152,14 @@ impl Sharp8080 {
                     0x0001 => self.ld_bc_d16(b0, b1),
                     _      => self.undefined_instruction(), 
                 }
+            }
+            Type::A16 => {
+                let address = (bus.read(pc_base+1) as u16) << 8 | bus.read(pc_base) as u16;
+                match opcode {
+                    0x00C3 => self.pc = address,
+                    _      => self.undefined_instruction()
+                }
+                self.decode_type_a16(instruction, address);
             }
             Type::CB => {
                 match opcode {
@@ -149,7 +189,7 @@ impl Sharp8080 {
                     0xCBE8..=0xCBEF => cb_set_bit!(self, opcode, 5),
                     0xCBF0..=0xCBF7 => cb_set_bit!(self, opcode, 6),
                     0xCBF8..=0xCBFF => cb_set_bit!(self, opcode, 7),
-                    _      => ()
+                    _      => self.undefined_instruction()
                 }
                 self.pc += instruction.length;
             }
@@ -157,12 +197,15 @@ impl Sharp8080 {
                 self.undefined_type();
             }
         }
-        self.decode(instruction);
         self.wait(instruction.cycles);
     }
 
-    fn decode(&self, instruction: &Instruction) {
-        println!("Instruction {:?}\n", instruction);
+    fn decode_type_n(&self, instruction: &Instruction) {
+        println!("{}", instruction.mnemonic);
+    }
+
+    fn decode_type_a16(&self, instruction: &Instruction, address: u16) {
+        println!("{} - Address: {:#06x}", instruction.mnemonic, address)
     }
 
     fn wait(&self, cycles: u8) {
@@ -182,7 +225,8 @@ impl Sharp8080 {
     }
 
     fn undefined_instruction(&self) {
-
+        println!("{:?}", self);
+        panic!("Undefined Instruction!\n");
     }
 
     fn undefined_type(&self) {
@@ -291,14 +335,14 @@ const INSTRUCTION_TABLE: [Instruction; 256] = [
 /* 0x4d */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0x4e */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0x4f */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x50 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x51 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x52 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x53 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x54 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x55 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x56 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0x57 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
+/* 0x50 */ Instruction{encoding:Type::N, mnemonic:"LD_D_B",cycles:4,length:1},
+/* 0x51 */ Instruction{encoding:Type::N, mnemonic:"LD_D_C",cycles:4,length:1},
+/* 0x52 */ Instruction{encoding:Type::N, mnemonic:"LD_D_D",cycles:4,length:1},
+/* 0x53 */ Instruction{encoding:Type::N, mnemonic:"LD_D_E",cycles:4,length:1},
+/* 0x54 */ Instruction{encoding:Type::N, mnemonic:"LD_D_H",cycles:4,length:1},
+/* 0x55 */ Instruction{encoding:Type::N, mnemonic:"LD_D_L",cycles:4,length:1},
+/* 0x56 */ Instruction{encoding:Type::N, mnemonic:"LD_D_HL",cycles:4,length:1},
+/* 0x57 */ Instruction{encoding:Type::N, mnemonic:"LD_D_A",cycles:4,length:1},
 /* 0x58 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0x59 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0x5a */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
@@ -406,7 +450,7 @@ const INSTRUCTION_TABLE: [Instruction; 256] = [
 /* 0xc0 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xc1 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xc2 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0xc3 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
+/* 0xc3 */ Instruction{encoding:Type::A16, mnemonic:"JP",cycles:16,length:3},
 /* 0xc4 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xc5 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xc6 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
@@ -454,7 +498,7 @@ const INSTRUCTION_TABLE: [Instruction; 256] = [
 /* 0xf0 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xf1 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xf2 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
-/* 0xf3 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
+/* 0xf3 */ Instruction{encoding:Type::N, mnemonic:"DI",cycles:4,length:1},
 /* 0xf4 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xf5 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
 /* 0xf6 */ Instruction{encoding:Type::N, mnemonic:"NOP",cycles:4,length:1},
