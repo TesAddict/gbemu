@@ -1,22 +1,54 @@
 use crate::Bus;
 
-macro_rules! ld_reg {
-    ($self: expr, $reg: expr, $opcode: expr) => {
+macro_rules! register_map {
+    ($self: expr, $opcode: expr) => {
         {
             match $opcode % 0x8 {
-                0x0 => $reg = $self.b,
-                0x1 => $reg = $self.c,
-                0x2 => $reg = $self.d,
-                0x3 => $reg = $self.e,
-                0x4 => $reg = $self.h,
-                0x5 => $reg = $self.l,
-                0x6 => $reg = $self.l,
-                0x7 => $reg = $self.a,
-                _   => ()
+                0x0 => $self.b,
+                0x1 => $self.c,
+                0x2 => $self.d,
+                0x3 => $self.e,
+                0x4 => $self.h,
+                0x5 => $self.l,
+                0x6 => $self.l,
+                0x7 => $self.a,
+                _   => 0
             }
         }
     }
 }
+
+macro_rules! ld_reg {
+    ($self: expr, $reg: expr, $opcode: expr) => {
+        {
+            $reg = register_map!($self, $opcode)
+        }
+    }
+}
+
+macro_rules! add_reg {
+    ($self: expr, $opcode: expr) => {
+        {
+            match $opcode % 0x8 {
+                0x0 => {
+                    if ($self.a & 0x0f) + ($self.b & 0x0f) > 0x0f {
+                        $self.hf = 1;
+                    }
+                    if ($self.a + $self.b) > 0xff {
+                        $self.cf = 1;
+                    }
+                    $self.a += $self.b;
+                    if ($self.a == 0) {
+                        $self.zf = 1;
+                    }
+                    $self.nf = 0;
+                },
+                _  => ()
+            }
+        }
+    }
+}
+
 
 macro_rules! cb_res_bit {
     ($self: expr, $opcode: expr, $bit: literal) => {
@@ -96,7 +128,8 @@ pub struct Sharp8080 {
 
 impl Sharp8080 {
     pub fn new() -> Sharp8080 {
-        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0, ime: true }
+        Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, 
+            pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0, ime: true }
     }
 
     fn apply_flags(&self) {
@@ -139,6 +172,8 @@ impl Sharp8080 {
 
                     0x0078..=0x007f => ld_reg!(self, self.a, opcode),
 
+                    0x0080..=0x0087 => add_reg!(self, opcode),
+
                     0x00F3          => self.ime = false,
                     _               => self.undefined_instruction(),
                 }
@@ -154,7 +189,8 @@ impl Sharp8080 {
                 }
             }
             Type::A16 => {
-                let address = (bus.read(pc_base+1) as u16) << 8 | bus.read(pc_base) as u16;
+                let address = (bus.read(pc_base+1) as u16) << 8 | 
+                               bus.read(pc_base) as u16;
                 match opcode {
                     0x00C3 => self.pc = address,
                     _      => self.undefined_instruction()
