@@ -41,6 +41,7 @@ macro_rules! add_reg {
                 $self.zf = 1;
             }
             $self.nf = 0;
+            $self.apply_flags();
         }
     }
 }
@@ -84,19 +85,7 @@ macro_rules! cb_set_bit {
 macro_rules! cb_bit {
     ($self: expr, $opcode: expr, $bit: literal) => {
         {
-            let mut result: u8 = 0;
-            match $opcode % 0x8 {
-                0x0 => result = $self.b & (0b1 << $bit),
-                0x1 => result = $self.c & (0b1 << $bit),
-                0x2 => result = $self.d & (0b1 << $bit),
-                0x3 => result = $self.e & (0b1 << $bit),
-                0x4 => result = $self.h & (0b1 << $bit),
-                0x5 => result = $self.l & (0b1 << $bit),
-                0x6 => result = $self.l & (0b1 << $bit),
-                0x7 => result = $self.a & (0b1 << $bit),
-                _   => () 
-            }
-            $self.zf = result;
+            $self.zf = register_map!($self, $opcode) & (0b1 << $bit);
             $self.nf = 0;
             $self.hf = 1;
             $self.apply_flags();
