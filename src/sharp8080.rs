@@ -29,26 +29,21 @@ macro_rules! ld_reg {
 macro_rules! add_reg {
     ($self: expr, $opcode: expr) => {
         {
-            match $opcode % 0x8 {
-                0x0 => {
-                    if ($self.a & 0x0f) + ($self.b & 0x0f) > 0x0f {
-                        $self.hf = 1;
-                    }
-                    if ($self.a + $self.b) > 0xff {
-                        $self.cf = 1;
-                    }
-                    $self.a += $self.b;
-                    if ($self.a == 0) {
-                        $self.zf = 1;
-                    }
-                    $self.nf = 0;
-                },
-                _  => ()
+            let reg = register_map!($self, $opcode);
+            if ($self.a & 0x0f) + (reg & 0x0f) > 0x0f {
+                $self.hf = 1;
             }
+            if ($self.a + reg) > 0xff {
+                $self.cf = 1;
+            }
+            $self.a += reg;
+            if ($self.a == 0) {
+                $self.zf = 1;
+            }
+            $self.nf = 0;
         }
     }
 }
-
 
 macro_rules! cb_res_bit {
     ($self: expr, $opcode: expr, $bit: literal) => {
