@@ -1,97 +1,76 @@
 use crate::Bus;
 
-macro_rules! register_map {
-    ($self: expr, $opcode: expr) => {
-        {
-            match $opcode % 0x8 {
-                0x0 => $self.b,
-                0x1 => $self.c,
-                0x2 => $self.d,
-                0x3 => $self.e,
-                0x4 => $self.h,
-                0x5 => $self.l,
-                0x6 => $self.l,
-                0x7 => $self.a,
-                _   => 0
-            }
+macro_rules! reg_map_get {
+    ($self: expr, $opcode: expr) => {{
+        match $opcode % 0x8 {
+            0x0 => $self.b,
+            0x1 => $self.c,
+            0x2 => $self.d,
+            0x3 => $self.e,
+            0x4 => $self.h,
+            0x5 => $self.l,
+            0x6 => $self.l,
+            0x7 => $self.a,
+            _   => 0
         }
-    }
+    }}
+}
+
+macro_rules! reg_map_set {
+    ($self: expr, $opcode: expr, $value:expr) => {{
+        match $opcode % 0x8 {
+            0x0 => $self.b = $value,
+            0x1 => $self.c = $value,
+            0x2 => $self.d = $value,
+            0x3 => $self.e = $value,
+            0x4 => $self.h = $value,
+            0x5 => $self.l = $value,
+            0x6 => $self.l = $value,
+            0x7 => $self.a = $value,
+            _   => ()
+        }
+    }}
 }
 
 macro_rules! ld_reg {
-    ($self: expr, $reg: expr, $opcode: expr) => {
-        {
-            $reg = register_map!($self, $opcode)
-        }
-    }
+    ($self: expr, $reg: expr, $op: expr) => {{
+        $reg = reg_map_get!($self, $op)
+    }}
 }
 
 macro_rules! add_reg {
-    ($self: expr, $opcode: expr) => {
-        {
-            let reg = register_map!($self, $opcode);
-            if ($self.a & 0x0f) + (reg & 0x0f) > 0x0f {
-                $self.hf = 1;
-            }
-            if ($self.a + reg) > 0xff {
-                $self.cf = 1;
-            }
-            $self.a += reg;
-            if ($self.a == 0) {
-                $self.zf = 1;
-            }
-            $self.nf = 0;
-            $self.apply_flags();
-        }
-    }
+    ($self: expr, $op: expr) => {{
+        let reg = reg_map_get!($self, $op);
+        $self.hf = if ($self.a & 0x0f) + (reg & 0x0f) > 0x0f { 1 } else { 0 };
+        $self.cf = if ($self.a + reg) as u16 > 0xff { 1 } else { 0 };
+        $self.a += reg;
+        $self.zf = if $self.a == 0 { 1 } else { 0 };
+        $self.nf = 0;
+        $self.apply_flags();
+    }}
 }
 
 macro_rules! cb_res_bit {
-    ($self: expr, $opcode: expr, $bit: literal) => {
-        {
-            match $opcode % 0x8 {
-                0x0 => $self.b &= !(0b1 << $bit),
-                0x1 => $self.c &= !(0b1 << $bit),
-                0x2 => $self.d &= !(0b1 << $bit),
-                0x3 => $self.e &= !(0b1 << $bit),
-                0x4 => $self.h &= !(0b1 << $bit),
-                0x5 => $self.l &= !(0b1 << $bit),
-                0x6 => $self.l &= !(0b1 << $bit),
-                0x7 => $self.a &= !(0b1 << $bit),
-                _   => () 
-            }
-        }
-    }
+    ($self: expr, $op: expr, $bit: literal) => {{
+        reg_map_set!($self, $op, reg_map_get!($self, $op) & !(0b1 << $bit));
+    }}
 }
 
 macro_rules! cb_set_bit {
-    ($self: expr, $opcode: expr, $bit: literal) => {
-        {
-            match $opcode % 0x8 {
-                0x0 => $self.b |= (0b1 << $bit),
-                0x1 => $self.c |= (0b1 << $bit),
-                0x2 => $self.d |= (0b1 << $bit),
-                0x3 => $self.e |= (0b1 << $bit),
-                0x4 => $self.h |= (0b1 << $bit),
-                0x5 => $self.l |= (0b1 << $bit),
-                0x6 => $self.l |= (0b1 << $bit),
-                0x7 => $self.a |= (0b1 << $bit),
-                _   => () 
-            }
-        }
-    }
+    ($self: expr, $op: expr, $bit: literal) => {{
+        reg_map_set!($self, $op, reg_map_get!($self, $op) | (0b1 << $bit));
+    }}
 }
 
 macro_rules! cb_bit {
-    ($self: expr, $opcode: expr, $bit: literal) => {
-        {
-            $self.zf = register_map!($self, $opcode) & (0b1 << $bit);
-            $self.nf = 0;
-            $self.hf = 1;
-            $self.apply_flags();
-        }
-    }
+    ($self: expr, $op: expr, $bit: literal) => {{
+        $self.zf = reg_map_get!($self, $op) & (0b1 << $bit);
+        $self.nf = 0;
+        $self.hf = 1;
+        $self.apply_flags();
+    }}
 }
+
 #[derive(Debug)]
 pub struct Sharp8080 {
     a: u8,
