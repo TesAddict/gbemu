@@ -1,15 +1,15 @@
 use crate::Bus;
 
 macro_rules! reg_map_get {
-    ($self: expr, $opcode: expr) => {{
-        match $opcode % 0x8 {
+    ($self: expr, $bus: expr, $op: expr) => {{
+        match $op % 0x8 {
             0x0 => $self.b,
             0x1 => $self.c,
             0x2 => $self.d,
             0x3 => $self.e,
             0x4 => $self.h,
             0x5 => $self.l,
-            0x6 => $self.l,
+            0x6 => $bus.read(($self.h as u16) << 8 | $self.l as u16),
             0x7 => $self.a,
             _   => 0
         }
@@ -17,8 +17,8 @@ macro_rules! reg_map_get {
 }
 
 macro_rules! reg_map_set {
-    ($self: expr, $opcode: expr, $value:expr) => {{
-        match $opcode % 0x8 {
+    ($self: expr, $op: expr, $value:expr) => {{
+        match $op % 0x8 {
             0x0 => $self.b = $value,
             0x1 => $self.c = $value,
             0x2 => $self.d = $value,
@@ -33,14 +33,14 @@ macro_rules! reg_map_set {
 }
 
 macro_rules! ld_reg {
-    ($self: expr, $reg: expr, $op: expr) => {{
-        $reg = reg_map_get!($self, $op)
+    ($self: expr, $bus: expr, $reg: expr, $op: expr) => {{
+        $reg = reg_map_get!($self, $bus, $op)
     }}
 }
 
 macro_rules! add_reg {
-    ($self: expr, $op: expr) => {{
-        let reg = reg_map_get!($self, $op);
+    ($self: expr, $bus: expr, $op: expr) => {{
+        let reg = reg_map_get!($self, $bus, $op);
         $self.hf = if ($self.a & 0x0f) + (reg & 0x0f) > 0x0f { 1 } else { 0 };
         $self.cf = if ($self.a + reg) as u16 > 0xff { 1 } else { 0 };
         $self.a += reg;
@@ -51,20 +51,20 @@ macro_rules! add_reg {
 }
 
 macro_rules! cb_res_bit {
-    ($self: expr, $op: expr, $bit: literal) => {{
-        reg_map_set!($self, $op, reg_map_get!($self, $op) & !(0b1 << $bit));
+    ($self: expr, $bus: expr, $op: expr, $bit: literal) => {{
+        reg_map_set!($self, $op, reg_map_get!($self, $bus, $op) & !(0b1 << $bit));
     }}
 }
 
 macro_rules! cb_set_bit {
-    ($self: expr, $op: expr, $bit: literal) => {{
-        reg_map_set!($self, $op, reg_map_get!($self, $op) | (0b1 << $bit));
+    ($self: expr, $bus: expr, $op: expr, $bit: literal) => {{
+        reg_map_set!($self, $op, reg_map_get!($self, $bus, $op) | (0b1 << $bit));
     }}
 }
 
 macro_rules! cb_bit {
-    ($self: expr, $op: expr, $bit: literal) => {{
-        $self.zf = reg_map_get!($self, $op) & (0b1 << $bit);
+    ($self: expr, $bus: expr, $op: expr, $bit: literal) => {{
+        $self.zf = reg_map_get!($self, $bus, $op) & (0b1 << $bit);
         $self.nf = 0;
         $self.hf = 1;
         $self.apply_flags();
@@ -99,9 +99,6 @@ impl Sharp8080 {
 
     }
 
-    pub fn step(&self) {
-    }
-
     pub fn fetch_opcode(&self, bus: &Bus) -> u16 {
         match bus.read(self.pc) {
             0xCB => {
@@ -126,16 +123,16 @@ impl Sharp8080 {
                     0x0002          => self.ld_bc_a(),
                     0x0003          => self.inc_bc(),
 
-                    0x0040..=0x0047 => ld_reg!(self, self.b, opcode),
-                    0x0048..=0x004f => ld_reg!(self, self.c, opcode),
-                    0x0050..=0x0057 => ld_reg!(self, self.d, opcode),
-                    0x0058..=0x005f => ld_reg!(self, self.e, opcode),
-                    0x0060..=0x0067 => ld_reg!(self, self.h, opcode),
-                    0x0068..=0x006f => ld_reg!(self, self.l, opcode),
+                    0x0040..=0x0047 => ld_reg!(self, bus, self.b, opcode),
+                    0x0048..=0x004f => ld_reg!(self, bus, self.c, opcode),
+                    0x0050..=0x0057 => ld_reg!(self, bus, self.d, opcode),
+                    0x0058..=0x005f => ld_reg!(self, bus, self.e, opcode),
+                    0x0060..=0x0067 => ld_reg!(self, bus, self.h, opcode),
+                    0x0068..=0x006f => ld_reg!(self, bus, self.l, opcode),
 
-                    0x0078..=0x007f => ld_reg!(self, self.a, opcode),
+                    0x0078..=0x007f => ld_reg!(self, bus, self.a, opcode),
 
-                    0x0080..=0x0087 => add_reg!(self, opcode),
+                    0x0080..=0x0087 => add_reg!(self, bus, opcode),
 
                     0x00F3          => self.ime = false,
                     _               => self.undefined_instruction(),
@@ -162,32 +159,32 @@ impl Sharp8080 {
             }
             Type::CB => {
                 match opcode {
-                    0xCB40..=0xCB47 => cb_bit!(self, opcode, 0),
-                    0xCB48..=0xCB4F => cb_bit!(self, opcode, 1),
-                    0xCB50..=0xCB57 => cb_bit!(self, opcode, 2),
-                    0xCB58..=0xCB5F => cb_bit!(self, opcode, 3),
-                    0xCB60..=0xCB67 => cb_bit!(self, opcode, 4),
-                    0xCB68..=0xCB6F => cb_bit!(self, opcode, 5),
-                    0xCB70..=0xCB77 => cb_bit!(self, opcode, 6),
-                    0xCB78..=0xCB7F => cb_bit!(self, opcode, 7),
+                    0xCB40..=0xCB47 => cb_bit!(self, bus, opcode, 0),
+                    0xCB48..=0xCB4F => cb_bit!(self, bus, opcode, 1),
+                    0xCB50..=0xCB57 => cb_bit!(self, bus, opcode, 2),
+                    0xCB58..=0xCB5F => cb_bit!(self, bus, opcode, 3),
+                    0xCB60..=0xCB67 => cb_bit!(self, bus, opcode, 4),
+                    0xCB68..=0xCB6F => cb_bit!(self, bus, opcode, 5),
+                    0xCB70..=0xCB77 => cb_bit!(self, bus, opcode, 6),
+                    0xCB78..=0xCB7F => cb_bit!(self, bus, opcode, 7),
                     // Restore bit opcodes.
-                    0xCB80..=0xCB87 => cb_res_bit!(self, opcode, 0),
-                    0xCB88..=0xCB8F => cb_res_bit!(self, opcode, 1),
-                    0xCB90..=0xCB97 => cb_res_bit!(self, opcode, 2),
-                    0xCB98..=0xCB9F => cb_res_bit!(self, opcode, 3),
-                    0xCBA0..=0xCBA7 => cb_res_bit!(self, opcode, 4),
-                    0xCBA8..=0xCBAF => cb_res_bit!(self, opcode, 5),
-                    0xCBB0..=0xCBB7 => cb_res_bit!(self, opcode, 6),
-                    0xCBB8..=0xCBBF => cb_res_bit!(self, opcode, 7),
+                    0xCB80..=0xCB87 => cb_res_bit!(self, bus, opcode, 0),
+                    0xCB88..=0xCB8F => cb_res_bit!(self, bus, opcode, 1),
+                    0xCB90..=0xCB97 => cb_res_bit!(self, bus, opcode, 2),
+                    0xCB98..=0xCB9F => cb_res_bit!(self, bus, opcode, 3),
+                    0xCBA0..=0xCBA7 => cb_res_bit!(self, bus, opcode, 4),
+                    0xCBA8..=0xCBAF => cb_res_bit!(self, bus, opcode, 5),
+                    0xCBB0..=0xCBB7 => cb_res_bit!(self, bus, opcode, 6),
+                    0xCBB8..=0xCBBF => cb_res_bit!(self, bus, opcode, 7),
                     // Set bit opcodes.
-                    0xCBC0..=0xCBC7 => cb_set_bit!(self, opcode, 0),
-                    0xCBC8..=0xCBCF => cb_set_bit!(self, opcode, 1),
-                    0xCBD0..=0xCBD7 => cb_set_bit!(self, opcode, 2),
-                    0xCBD8..=0xCBDF => cb_set_bit!(self, opcode, 3),
-                    0xCBE0..=0xCBE7 => cb_set_bit!(self, opcode, 4),
-                    0xCBE8..=0xCBEF => cb_set_bit!(self, opcode, 5),
-                    0xCBF0..=0xCBF7 => cb_set_bit!(self, opcode, 6),
-                    0xCBF8..=0xCBFF => cb_set_bit!(self, opcode, 7),
+                    0xCBC0..=0xCBC7 => cb_set_bit!(self, bus, opcode, 0),
+                    0xCBC8..=0xCBCF => cb_set_bit!(self, bus, opcode, 1),
+                    0xCBD0..=0xCBD7 => cb_set_bit!(self, bus, opcode, 2),
+                    0xCBD8..=0xCBDF => cb_set_bit!(self, bus, opcode, 3),
+                    0xCBE0..=0xCBE7 => cb_set_bit!(self, bus, opcode, 4),
+                    0xCBE8..=0xCBEF => cb_set_bit!(self, bus, opcode, 5),
+                    0xCBF0..=0xCBF7 => cb_set_bit!(self, bus, opcode, 6),
+                    0xCBF8..=0xCBFF => cb_set_bit!(self, bus, opcode, 7),
                     _      => self.undefined_instruction()
                 }
                 self.pc += instruction.length;
@@ -199,16 +196,16 @@ impl Sharp8080 {
         self.wait(instruction.cycles);
     }
 
+    fn wait(&self, cycles: u8) {
+
+    }
+
     fn decode_type_n(&self, instruction: &Instruction) {
         println!("{}", instruction.mnemonic);
     }
 
     fn decode_type_a16(&self, instruction: &Instruction, address: u16) {
         println!("{} - Address: {:#06x}", instruction.mnemonic, address)
-    }
-
-    fn wait(&self, cycles: u8) {
-
     }
 
     fn ld_bc_a(&self) {
