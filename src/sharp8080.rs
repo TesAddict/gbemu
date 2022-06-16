@@ -17,7 +17,7 @@ macro_rules! reg_map_get {
 }
 
 macro_rules! reg_map_set {
-    ($self: expr, $op: expr, $value:expr) => {{
+    ($self: expr, $bus: expr, $op: expr, $value:expr) => {{
         match $op % 0x8 {
             0x0 => $self.b = $value,
             0x1 => $self.c = $value,
@@ -25,7 +25,7 @@ macro_rules! reg_map_set {
             0x3 => $self.e = $value,
             0x4 => $self.h = $value,
             0x5 => $self.l = $value,
-            0x6 => $self.l = $value,
+            0x6 => $bus.write(($self.h as u16) << 8 | $self.l as u16, $value),
             0x7 => $self.a = $value,
             _   => ()
         }
@@ -46,19 +46,53 @@ macro_rules! add_reg {
         $self.a += reg;
         $self.zf = if $self.a == 0 { 1 } else { 0 };
         $self.nf = 0;
-        $self.apply_flags();
+    }}
+}
+
+macro_rules! cb_sra {
+    ($self: expr, $bus: expr, $op: expr) => {{
+        let val = reg_map_get!($self, $bus, $op);
+        reg_map_set!($self, $bus, $op, val >> 1 | val & 0x80);
+        $self.zf = if val >> 1 | val & 0x80 == 0 { 0 } else { 1 };
+        $self.nf = 0;
+        $self.hf = 0;
+        $self.cf = if val & 0x01 == 1 { 1 } else { 0 };
+    }}
+}
+
+macro_rules! cb_swap {
+    ($self: expr, $bus: expr, $op: expr) => {{
+        let val = reg_map_get!($self, $bus, $op);
+        reg_map_set!($self, $bus, $op, (val << 4 | val >> 4));
+        $self.zf = if val << 4 | val >> 4 == 0 { 0 } else { 1 };
+        $self.nf = 0;
+        $self.hf = 0;
+        $self.cf = 0;
+    }}
+}
+
+macro_rules! cb_srl {
+    ($self: expr, $bus: expr, $op: expr) => {{
+        let val = reg_map_get!($self, $bus, $op);
+        reg_map_set!($self, $bus, $op, val >> 1);
+        $self.zf = if val >> 1 == 0 { 0 } else { 1 };
+        $self.nf = 0;
+        $self.hf = 0;
+        $self.cf = if val & 0x01 == 1 { 1 } else { 0 };
     }}
 }
 
 macro_rules! cb_res_bit {
     ($self: expr, $bus: expr, $op: expr, $bit: literal) => {{
-        reg_map_set!($self, $op, reg_map_get!($self, $bus, $op) & !(0b1 << $bit));
+        reg_map_set!($self, $bus, $op, 
+            reg_map_get!($self, $bus, $op) & !(0b1 << $bit));
     }}
 }
 
 macro_rules! cb_set_bit {
     ($self: expr, $bus: expr, $op: expr, $bit: literal) => {{
-        reg_map_set!($self, $op, reg_map_get!($self, $bus, $op) | (0b1 << $bit));
+        reg_map_set!($self, $bus, $op, 
+            reg_map_get!($self, $bus, $op) | (0b1 << $bit));
     }}
 }
 
@@ -67,7 +101,6 @@ macro_rules! cb_bit {
         $self.zf = reg_map_get!($self, $bus, $op) & (0b1 << $bit);
         $self.nf = 0;
         $self.hf = 1;
-        $self.apply_flags();
     }}
 }
 
@@ -159,6 +192,9 @@ impl Sharp8080 {
             }
             Type::CB => {
                 match opcode {
+                    0xCB28..=0xCB2F => cb_sra!(self, bus, opcode),
+                    0xCB30..=0xCB37 => cb_swap!(self, bus, opcode),
+                    0xCB38..=0xCB3F => cb_srl!(self, bus, opcode),
                     0xCB40..=0xCB47 => cb_bit!(self, bus, opcode, 0),
                     0xCB48..=0xCB4F => cb_bit!(self, bus, opcode, 1),
                     0xCB50..=0xCB57 => cb_bit!(self, bus, opcode, 2),
@@ -167,7 +203,6 @@ impl Sharp8080 {
                     0xCB68..=0xCB6F => cb_bit!(self, bus, opcode, 5),
                     0xCB70..=0xCB77 => cb_bit!(self, bus, opcode, 6),
                     0xCB78..=0xCB7F => cb_bit!(self, bus, opcode, 7),
-                    // Restore bit opcodes.
                     0xCB80..=0xCB87 => cb_res_bit!(self, bus, opcode, 0),
                     0xCB88..=0xCB8F => cb_res_bit!(self, bus, opcode, 1),
                     0xCB90..=0xCB97 => cb_res_bit!(self, bus, opcode, 2),
@@ -176,7 +211,6 @@ impl Sharp8080 {
                     0xCBA8..=0xCBAF => cb_res_bit!(self, bus, opcode, 5),
                     0xCBB0..=0xCBB7 => cb_res_bit!(self, bus, opcode, 6),
                     0xCBB8..=0xCBBF => cb_res_bit!(self, bus, opcode, 7),
-                    // Set bit opcodes.
                     0xCBC0..=0xCBC7 => cb_set_bit!(self, bus, opcode, 0),
                     0xCBC8..=0xCBCF => cb_set_bit!(self, bus, opcode, 1),
                     0xCBD0..=0xCBD7 => cb_set_bit!(self, bus, opcode, 2),
@@ -193,6 +227,7 @@ impl Sharp8080 {
                 self.undefined_type();
             }
         }
+        self.apply_flags();
         self.wait(instruction.cycles);
     }
 
