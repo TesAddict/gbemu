@@ -9,7 +9,7 @@ pub struct GameBoy {
 
 impl GameBoy {
     pub fn power_on() -> GameBoy {
-        GameBoy { cpu: Sharp8080::new(), bus: Bus::new() }
+        GameBoy { cpu: Sharp8080::new(0x0100), bus: Bus::new() }
     }
 
     pub fn load_game(&mut self, path: String) {

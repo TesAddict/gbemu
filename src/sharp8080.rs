@@ -1,5 +1,7 @@
-use crate::Bus;
+use crate::BusTrait;
 mod instructions;
+#[cfg(test)]
+mod test;
 pub use instructions::INSTRUCTION_TABLE;
 pub use instructions::INSTRUCTION_TABLE_CB;
 pub use instructions::Instruction;
@@ -175,26 +177,26 @@ pub struct Sharp8080 {
 }
 
 impl Sharp8080 {
-    pub fn new() -> Sharp8080 {
+    pub fn new(pc: u16) -> Sharp8080 {
         Sharp8080 { a: 0, b: 0, c: 0, d: 0, e: 0, h: 0, l: 0, sp: 0, 
-            pc: 0x0100, zf: 0, nf: 0, hf: 0, cf: 0, ime: true }
+            pc: pc, zf: 0, nf: 0, hf: 0, cf: 0, ime: true }
     }
 
     fn apply_flags(&self) {
 
     }
 
-    pub fn fetch_opcode(&self, bus: &Bus) -> u16 {
+    pub fn fetch_opcode(&self, bus: &dyn BusTrait) -> u16 {
         match bus.read(self.pc) {
             0xCB => {
-                (0xCB as u16) << 8 &
+                (0xCB as u16) << 8 |
                   bus.read(self.pc+1) as u16
             } 
             _ => { bus.read(self.pc) as u16}
         }
     }
 
-    pub fn execute(&mut self, bus: &mut Bus, opcode: u16) {
+    pub fn execute(&mut self, bus: &mut dyn BusTrait, opcode: u16) {
         // pc_base points to the first param or next opcode.
         let (instruction, pc_base) = if opcode & 0xFF00 == 0xCB00 {
             (&INSTRUCTION_TABLE_CB[((opcode & 0x00FF) as usize)], self.pc+2)
