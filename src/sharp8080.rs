@@ -60,7 +60,7 @@ macro_rules! cb_rlc {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         cb_rl!($self, $bus, $op);
-        $self.cf = if val & 0x80 == 1 { 1 } else { 0 };
+        $self.cf = if val & 0x80 != 0 { 1 } else { 0 };
     }}
 }
 
@@ -68,7 +68,7 @@ macro_rules! cb_rrc {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         cb_rr!($self, $bus, $op);
-        $self.cf = if val & 0x01 == 1 { 1 } else { 0 };
+        $self.cf = if val & 0x01 != 0 { 1 } else { 0 };
     }}
 }
 
@@ -76,7 +76,7 @@ macro_rules! cb_rl {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, (val << 1) | ((val & 0x80) >> 7));
-        $self.zf = if (val << 1) | ((val & 0x80) >> 7) == 0 { 0 } else { 1 };
+        $self.zf = if (val << 1) | ((val & 0x80) >> 7) == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
     }}
@@ -86,7 +86,7 @@ macro_rules! cb_rr {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, (val >> 1) | ((val & 0x01) << 7));
-        $self.zf = if (val >> 1) | ((val & 0x01) << 7) == 0 { 0 } else { 1 };
+        $self.zf = if (val >> 1) | ((val & 0x01) << 7) == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
     }}
@@ -96,10 +96,10 @@ macro_rules! cb_sla {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, val << 1 | val & 0x01);
-        $self.zf = if val << 1 | val & 0x01 == 0 { 0 } else { 1 };
+        $self.zf = if val << 1 | val & 0x01 == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
-        $self.cf = if val & 0x80 == 1 { 1 } else { 0 };
+        $self.cf = if val & 0x80 != 0 { 1 } else { 0 };
     }}
 }
 
@@ -107,7 +107,7 @@ macro_rules! cb_sra {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, val >> 1 | val & 0x80);
-        $self.zf = if val >> 1 | val & 0x80 == 0 { 0 } else { 1 };
+        $self.zf = if val >> 1 | val & 0x80 == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
         $self.cf = if val & 0x01 == 1 { 1 } else { 0 };
@@ -118,7 +118,7 @@ macro_rules! cb_swap {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, (val << 4 | val >> 4));
-        $self.zf = if val << 4 | val >> 4 == 0 { 0 } else { 1 };
+        $self.zf = if val << 4 | val >> 4 == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
         $self.cf = 0;
@@ -129,10 +129,10 @@ macro_rules! cb_srl {
     ($self: expr, $bus: expr, $op: expr) => {{
         let val = reg_map_get!($self, $bus, $op);
         reg_map_set!($self, $bus, $op, val >> 1);
-        $self.zf = if val >> 1 == 0 { 0 } else { 1 };
+        $self.zf = if val >> 1 == 0 { 1 } else { 0 };
         $self.nf = 0;
         $self.hf = 0;
-        $self.cf = if val & 0x01 == 1 { 1 } else { 0 };
+        $self.cf = if val & 0x01 != 0 { 1 } else { 0 };
     }}
 }
 
